@@ -1,3 +1,6 @@
+# 2020 mmhalm@utu.fi
+# Project work for vm.utu.fi download log parsing
+
 import os
 import pwd
 import logging
