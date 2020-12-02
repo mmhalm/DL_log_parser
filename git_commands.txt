@@ -1,0 +1,9 @@
+git status
+
+git add . 
+    All files from directory
+
+git commit -m ("short message that describes changes")
+
+git push
+    Adds the changes to git repository

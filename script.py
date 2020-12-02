@@ -19,7 +19,9 @@ CONFIG_FILE     = "site.conf" # All instance/site specific values
 SCRIPTNAME = os.path.basename(__file__)
 
 
-
+#
+# Read config file
+#
 def read_config_file(cfgfile: str):
     """Reads (with ConfigParser()) '[Site]' and creates global variables. Argument 'cfgfile' has to be a filename only (not path + file) and the file must exist in the same directory as this script."""
     cfgfile = os.path.join(
@@ -35,16 +37,14 @@ def read_config_file(cfgfile: str):
     for k, v in cfg.items('Site'):
         globals()[k] = v
 
-
-
+#
+# Get filename, size and datetime from a (log) list
+#
 def getFilenameSizeDatetime(item: list):
-    sixthItem = item[6]
-    startOfFilename = sixthItem[1:].find("/")
-    filename = sixthItem[startOfFilename + 1:]    
-    size = int(item[9])                         
-    dateAndTime = item[3] + " " + item[4]
 
-    myDatetime = datetime.strptime(dateAndTime, "[%d/%b/%Y:%H:%M:%S %z]")
+    filename =  item[6].split("/")[-1]  
+    size = int(item[9])                         
+    myDatetime = datetime.strptime(item[3], "[%d/%b/%Y:%H:%M:%S")
  
     return (filename, myDatetime, size)
 
@@ -98,9 +98,23 @@ if __name__ == '__main__':
         os._exit(-1)
 
     #
+    # Get last inserted datetime
+    #
+    select = '''select max(datetime) from download''' 
+    try:
+        with sqlite3.connect(DATABASE) as db:
+            selcur = db.cursor()
+            result = selcur.execute(select).fetchall()[0][0]
+            lastDateTime = datetime.strptime(result, "%Y-%m-%d %H:%M:%S")
+            print(lastDateTime)
+    except:
+        log.exception(f"Error getting last inserted datime from download file")
+
+    
+
+    #
     # Read log file
     #
-
     with open("vm.utu.fi.access.log", "r") as inpFile:
 
         with sqlite3.connect(DATABASE) as db:
@@ -110,22 +124,24 @@ if __name__ == '__main__':
             rowcount = 0
             savecount = 0
 
+            sqlcommand = '''INSERT INTO dlevent (filename, datetime, size) VALUES (?,?,?)'''           
+
             for line in inpFile:
                 item=line.split()
                 rowcount += 1
                 if item[6].startswith("/download"):
                     result = getFilenameSizeDatetime(item)
-                    
-                    print(f"file: {result[0]}, size: {result[2]}, datetime: {result[1].isoformat()} ")
-                    sqlcommand = '''INSERT INTO dlevent (filename, datetime, size) VALUES (?,?,?)'''
-                    
 
-                    try:            
-                        cursor.execute(sqlcommand, result)
-                        savecount += 1
-                    except Exception as e:
-                        print(f"error: {str(e)} ")
-                        errcount += 1
-                        log.error(f"Error in {result[0]}, {result[1].isoformat()}")
+                    if lastDateTime < result[1]:
+                    
+                        #print(f"file: {result[0]}, size: {result[2]}, datetime: {result[1].isoformat()} ")
 
-    print(f"Errors: {errcount}, rows: {rowcount}, saved items: {savecount}")
+                        try:            
+                            cursor.execute(sqlcommand, result)
+                            savecount += 1
+                        except Exception as e:
+                            print(f"error: {str(e)} ")
+                            errcount += 1
+                            log.error(f"Error in {result[0]}, {result[1].isoformat()}")
+
+    print(f"errors: {errcount}, rows: {rowcount}, saved items: {savecount}")
