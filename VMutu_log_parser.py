@@ -40,7 +40,7 @@ def read_config_file(cfgfile: str):
 #
 # Get filename, size and datetime from a (log) list
 #
-def getFilenameSizeDatetime(item: list):
+def getFilenameDatetimeSize(item: list):
 
     filename =  item[6].split("/")[-1]  
     size = int(item[9])                         
@@ -104,18 +104,20 @@ if __name__ == '__main__':
     try:
         with sqlite3.connect(DATABASE) as db:
             selcur = db.cursor()
-            result = selcur.execute(select).fetchall()[0][0]
-            lastDateTime = datetime.strptime(result, "%Y-%m-%d %H:%M:%S")
-            print(lastDateTime)
+            resultDate = selcur.execute(select).fetchall()[0][0]
+            lastDateTime = datetime.strptime(resultDate, "%Y-%m-%d %H:%M:%S")
+            # print(lastDateTime)
+    except TypeError:
+        log.exception("No max datetime")
+        lastDateTime = datetime.utcfromtimestamp(0)
     except:
-        log.exception(f"Error getting last inserted datime from download file")
-
+        log.exception("Error getting last inserted datetime from download file")
     
 
     #
-    # Read log file
+    # Read log file and save desired data to database
     #
-    with open("vm.utu.fi.access.log", "r") as inpFile:
+    with open("vm.utu.fi.access.log", "r") as inpFile, open("reject_log.txt", "a+") as rejectLog:
 
         with sqlite3.connect(DATABASE) as db:
 
@@ -127,10 +129,13 @@ if __name__ == '__main__':
             sqlcommand = '''INSERT INTO dlevent (filename, datetime, size) VALUES (?,?,?)'''           
 
             for line in inpFile:
+
                 item=line.split()
                 rowcount += 1
+
                 if item[6].startswith("/download"):
-                    result = getFilenameSizeDatetime(item)
+
+                    result = getFilenameDatetimeSize(item)
 
                     if lastDateTime < result[1]:
                     
@@ -140,8 +145,8 @@ if __name__ == '__main__':
                             cursor.execute(sqlcommand, result)
                             savecount += 1
                         except Exception as e:
-                            print(f"error: {str(e)} ")
+                            # print(f"error: {str(e)} ")
                             errcount += 1
                             log.error(f"Error in {result[0]}, {result[1].isoformat()}")
-
-    print(f"errors: {errcount}, rows: {rowcount}, saved items: {savecount}")
+                            rejectLog.write(line)
+    # print(f"errors: {errcount}, rows: {rowcount}, saved items: {savecount}")
